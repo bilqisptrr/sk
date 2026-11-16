@@ -438,7 +438,7 @@ void convertToBitParallelDSP(u8 ninputs, const SinglePatternList_t &singles, boo
 		for(size_t t=0;t<ntargets;t++)
 		{
 			u8 k=targets[t];
-			if(__builtin_popcountll(w) >= (u32)(ninputs-k))
+			if((u32)__builtin_popcountll(w) >= (u32)(ninputs-k))
 			{
 				qbuffer[t] = (qbuffer[t]<<1) | 1ULL;
 			}

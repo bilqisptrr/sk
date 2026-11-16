@@ -92,6 +92,54 @@ make pgo NO_PLT=1 PGO_RUN_ARGS="sample_config.txt --timeout 30"
 
 Use a workload representative of production, since a profile for a different search mode may reduce performance. `make pgo` rebuilds the binary and discards existing local PGO profile files.
 
+### Clang context-sensitive PGO and BOLT (optional)
+
+The following workflows use a separate instrumented build for each profiling
+stage. Install a compatible Clang and `llvm-profdata`; BOLT additionally needs
+`llvm-bolt` **with its instrumentation runtime**, and a supported Linux ELF
+CPU (normally x86-64 or AArch64). Use matching LLVM versions and put their
+binaries on `PATH` (or set `CXX`, `LLVM_PROFDATA`, and `LLVM_BOLT`).
+
+```sh
+# Two-stage IR-PGO + context-sensitive profiling; output: ./SorterHunter
+make cspgo PGO_RUN_ARGS="configs/webrtc/feedback_sort_8.txt --timeout 30"
+
+# Ordinary Clang optimized build + instrumented BOLT; output: ./SorterHunter.bolt
+make bolt PGO_RUN_ARGS="configs/webrtc/feedback_sort_8.txt --timeout 30"
+
+# IR-PGO -> context-sensitive PGO -> BOLT; output: ./SorterHunter.bolt
+make cspgo-bolt PGO_RUN_ARGS="configs/webrtc/feedback_sort_8.txt --timeout 30"
+```
+
+`cspgo` trains a `-fprofile-generate` build, rebuilds with its profile and
+`-fcs-profile-generate`, then merges the base and context-sensitive profiles
+before the final `-fprofile-use` build. It does not mix the distinct Clang
+`-fprofile-instr-generate` format used by the older `make pgo` workflow.
+BOLT rebuilds with `--emit-relocs`, instruments a copy and trains it without
+requiring Linux perf/LBR privileges. It writes `SorterHunter.bolt` separately;
+`SorterHunter` remains the un-BOLTed build. Rebuild/retrain after source, flags,
+or workload changes. `make distclean` deletes the generated profiles and both
+binaries; `make clean` deletes the binaries but keeps profiles.
+
+Training runs must **exit normally** so their profiles are flushed: use
+`--timeout` or a naturally terminating config, not `kill -9` or an external
+hard timeout. The example only demonstrates the workflow; train on a workload
+representative of the real use case. Check binary correctness and benchmark
+both variants on the target hardware: CSPGO, BOLT, or extra tuning can also
+make a particular workload slower. This repository does not claim a measured
+BOLT speedup.
+
+The existing Clang `-mllvm` inline and unroll thresholds remain configurable
+with `LLVM_INLINE_THRESHOLD` and `LLVM_UNROLL_THRESHOLD`. When lld is used,
+these are also forwarded to its LTO backend. Optional experimental backend
+flags can be supplied via `LLVM_EXTRA_FLAGS` for compilation and
+`LLVM_LTO_EXTRA_FLAGS` for lld; do not assume an undocumented LLVM option is
+portable across versions. BOLT layout flags can be overridden with
+`BOLT_FLAGS`. For example, run the tests against the optimized binary with
+`python3 tests/timeout_test.py ./SorterHunter.bolt` and
+`python3 tests/webrtc_configs_test.py ./SorterHunter.bolt`.
+
+
 ## Working principles
 After the config file is read, the program works as follows:
 #### Determining the prefix to use

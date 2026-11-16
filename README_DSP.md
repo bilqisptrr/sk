@@ -1,5 +1,12 @@
 # SorterHunter-DSP — Pencarian Jaringan Spesifik Domain DSP WebRTC
 
+> **Status contoh:** Tabel dan `sample_config_dsp_*.txt` di bawah adalah skenario
+> eksplorasi, bukan bukti bahwa WebRTC upstream saat ini menggunakan window,
+> persentil, atau filter tersebut. Untuk kandidat yang dicocokkan dengan call
+> site WebRTC tertentu, lihat [configs/webrtc](configs/webrtc/README.md).
+> Network yang ditemukan perlu fallback, validasi kesetaraan, dan benchmark
+> terhadap kode asli sebelum dipakai dalam fork.
+
 Fork dari [SorterHunter](https://github.com/bertdobbelaere/SorterHunter) (Bert Dobbelaere, public domain) yang dirombak dari pencarian **sorter generik** menjadi pencarian **topologi jaringan khusus pipeline DSP WebRTC**. Seluruh perombakan mengikuti blueprint berikut:
 
 | Modul DSP WebRTC | Kebutuhan Statistik | Topologi yang Diperebutkan | Mode |
@@ -79,7 +86,7 @@ Parameter baru `MaxActiveWires` = **jumlah wire aktif maksimum per layer (stage)
 ```bash
 make                                    # build (g++ / clang++, flag PGO lama tetap ada)
 ./SorterHunter sample_config_dsp_sliding.txt    # audio median 3-tap, N=9
-./SorterHunter sample_config_dsp_quantile.txt   # persentil GCC, N=16
+./SorterHunter sample_config_dsp_quantile.txt   # contoh kuantil, N=16
 ./SorterHunter sample_config_dsp_mink.txt       # noise floor VAD, N=16
 ./SorterHunter sample_config_dsp_video.txt      # 3x3 min+median+max, N=9
 ```
@@ -89,7 +96,7 @@ Jaringan hasil dicetak per baris dalam format JSON-ish (kompatibel tooling lama)
 | File | Mode | Ukuran | Depth | Catatan |
 |---|---|---|---|---|
 | `DSP_SlidingInsertion_9_8_4.json` | 2 | **8 CE** | 4 | vs sorter generik N=9 = 25 CE |
-| `DSP_Quantile_16_33_11.json` | 1 | 33 CE | 11 | p90+trim target {13,14}; vs sorter N=16 ≈ 158 CE |
+| `DSP_Quantile_16_33_11.json` | 1 | 33 CE | 11 | target {13,14}, bukan trimmed mean lengkap |
 | `DSP_MinK_16_42_14.json` | 3 | 42 CE | 14 | 4 nilai terkecil terisolasi (ranked) |
 | `DSP_MultiOutput_9_22_9.json` | 4 | 22 CE | 9 | min+median+max, SDt=[5,8,6] |
 
@@ -110,6 +117,6 @@ Dua bug ditemukan & diperbaiki berkat validasi brute-force ini:
 ## 7. Batasan & catatan
 
 - Verifikasi kuantil menjamin **ranked selection** (wire ke-k = nilai peringkat ke-k+1, tersortir di antara dirinya) pada indeks target; wire lain bebas ("tanpa menyentuh sisanya"). Varian "K terkecil sebagai set tanpa urutan internal" **tidak bisa** diverifikasi zero-one principle secara sound — makanya min/max-K diimplementasi sebagai kuantil rentang `[0..K-1]` / `[N-K..N-1]` (bonus: K nilai terisolasi sekaligus terurut).
-- Untuk N=32/64 (window jitter buffer besar), enumerasi 2^N tidak mungkin — gunakan prefix seperti mode klasik: `PrefixType=2` + `GreedyPrefixSize` yang cukup (mis. 16–24) sehingga vektor uji = output prefix (ribuan, bukan miliaran). Validasi Python untuk N > 16 tidak lagi ekshaustif; gunakan sampling acak + semua pola dengan popcount di sekitar N-k (batas keputusan kuantil).
+- Untuk N=32/64, enumerasi 2^N umumnya tidak praktis. Prefix dapat mengurangi output yang harus diuji, tetapi greedy prefix maupun kombinasi outputnya sendiri dapat memakan waktu atau memori besar; ukuran prefix tertentu tidak menjamin kelayakan. Validasi sampling bukan bukti kebenaran ekshaustif.
 - `MaxActiveWires` ekstrem (mis. 2–4) membuat konstruksi solusi awal lambat karena jaringan acak punya layer lebar; batas realistis = jumlah register target.
 - Simetri otomatis nonaktif untuk kelas input/target yang tidak tertutup cermin; untuk target simetri-cermin tetap aktif.
