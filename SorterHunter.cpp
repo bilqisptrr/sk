@@ -324,11 +324,8 @@ bool testpairsFromPrefixOutput(const Network_t &pairs, BitParallelList_t &bpl)
 
 		if(!checkOutputGroup(data,qgroup,accum))
 		{
-			while( (accum & 1ull) == 0)
-			{
-				accum>>=1;
-				failvector++;
-			}
+			// A failing group has at least one set bit.
+			failvector += (size_t)__builtin_ctzll(accum);
 
 			bumpVectorPosition(bpl, failvector);
 
@@ -367,15 +364,9 @@ bool testInitialPairsFromPrefixOutput(const Network_t &pairs, const BitParallelL
 
 		if(!checkOutputGroup(data,qgroup,accum))
 		{
-			while( (accum & 1ull) == 0)
-			{
-				accum>>=1;
-				for(size_t k=0;k<N;k++)
-					data[k]>>=1;
-			}
-
+			const unsigned failingBit = (unsigned)__builtin_ctzll(accum);
 			for(size_t k=0;k<N;k++)
-				failed_output_pattern |= (data[k]&1) << k;
+				failed_output_pattern |= ((data[k] >> failingBit)&1) << k;
 
 			return false;
 		}
@@ -999,11 +990,18 @@ int main(int argc, char *argv[])
 
 			SortWord_t failed_output_pattern;
 
-			bool initial_regok = (MaxActiveWires==0) || (computeMaxLayerWires(se)<=MaxActiveWires);
+			bool initial_regok = (MaxActiveWires==0) || (MaxActiveWires>=N) || (computeMaxLayerWires(se)<=MaxActiveWires);
+
+			if(!initial_regok && postfix.empty())
+			{
+				// Appending comparators cannot shrink an existing layer without a postfix.
+				printf("Error: initial network exceeds MaxActiveWires=%u; try a higher limit or a different random seed.\n", MaxActiveWires);
+				return -1;
+			}
 
 			if(initial_regok && testInitialPairsFromPrefixOutput(se, parallelpatterns_from_prefix, failed_output_pattern))
 				break;
-						
+
 			Pair_t p;
 			
 			if(postfix.size() == 0) // Empty postfix: find a pattern that fixes an arbitrary inversion in the first failed output
@@ -1109,7 +1107,7 @@ int main(int argc, char *argv[])
 
 			/* Register pressure gate: reject candidates whose widest layer exceeds the
 			   vector register budget (MaxActiveWires). */
-			bool regok = (MaxActiveWires==0) || (computeMaxLayerWires(se)<=MaxActiveWires);
+			bool regok = (MaxActiveWires==0) || (MaxActiveWires>=N) || (computeMaxLayerWires(se)<=MaxActiveWires);
 
 			/* Test whether the new postfix network yields a valid network for the selected
 			   domain mode when combined with the prefix */

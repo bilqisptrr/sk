@@ -178,8 +178,9 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 	
 	Network_t network;
 	u32 state=0; // 0: scan for '(' / 1: scan for inner ',' / 2: scan for ')' / 3: scan for outer ',' / 100: error
-	size_t tokenstart;
-	uint64_t p1,p2;
+	// These values are set by earlier parser states before they are used.
+	size_t tokenstart=0;
+	uint64_t p1=0, p2=0;
 	for(size_t idx=0;idx<value.size();idx++)
 	{
 		char c=value[idx];

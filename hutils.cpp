@@ -73,39 +73,20 @@ void OCH_t::print() const
 
 u32 computeDepth(const Network_t &nw)
 {
-	std::vector<SortWord_t> layers;
-	int nlayers=0;
-
-	for(size_t k=0;k<nw.size();k++)
+	// A comparator goes immediately after the latest layer touching either wire.
+	// Layer numbers are one-based, leaving zero for an untouched wire.
+	size_t wireDepth[NMAX] = {};
+	size_t depth = 0;
+	for(size_t k=0; k<nw.size(); ++k)
 	{
-		u32 i=nw[k].lo;
-		u32 j=nw[k].hi;
-		int matchidx=nlayers;
-		int idx=nlayers-1;
-		while(idx>=0)
-		{
-			if((layers[idx] & ((1ULL<<i)|(1ULL<<j))) == 0)
-			{
-				matchidx=idx;
-			}
-			else
-			{
-				break;
-			}
-			idx--;
-		}
-		if(matchidx>=nlayers)
-		{
-			layers.push_back(0);
-			nlayers++;
-		}
-		layers[matchidx]|= 1ULL<<i;
-		layers[matchidx]|= 1ULL<<j;
+		const Pair_t &p = nw[k];
+		const size_t layer = 1 + (wireDepth[p.lo] > wireDepth[p.hi] ? wireDepth[p.lo] : wireDepth[p.hi]);
+		wireDepth[p.lo] = wireDepth[p.hi] = layer;
+		if(layer > depth)
+			depth = layer;
 	}
-
-	return nlayers;
+	return (u32)depth;
 }
-
 
 void decomposeLayers(const Network_t &nw, std::vector<Network_t> &layers)
 {
@@ -144,26 +125,31 @@ void decomposeLayers(const Network_t &nw, std::vector<Network_t> &layers)
 
 u32 computeMaxLayerWires(const Network_t &nw)
 {
-	std::vector<Network_t> layers;
-	decomposeLayers(nw,layers);
-
-	u32 maxwires=0;
-	for(size_t l=0;l<layers.size();l++)
+	// Each layer contains disjoint comparators, so each contributes two wires
+	// (or one for a degenerate self-pair). Keep common-sized networks on the stack and allocate
+	// only for unusually deep networks; there can be at most nw.size() layers.
+	const size_t stackLayers = 128;
+	u8 stackCounts[stackLayers] = {};
+	std::vector<u8> extraCounts;
+	u8 *counts = stackCounts;
+	if(nw.size() > stackLayers)
 	{
-		SortWord_t mask=0;
-		for(size_t k=0;k<layers[l].size();k++)
-		{
-			mask |= (1ULL<<layers[l][k].lo) | (1ULL<<layers[l][k].hi);
-		}
-		u32 w=(u32)__builtin_popcountll(mask);
-		if(w>maxwires)
-		{
-			maxwires=w;
-		}
+		extraCounts.resize(nw.size(), 0);
+		counts = extraCounts.data();
+	}
+	size_t wireDepth[NMAX] = {};
+	u32 maxwires = 0;
+	for(size_t k=0; k<nw.size(); ++k)
+	{
+		const Pair_t &p = nw[k];
+		const size_t layer = 1 + (wireDepth[p.lo] > wireDepth[p.hi] ? wireDepth[p.lo] : wireDepth[p.hi]);
+		wireDepth[p.lo] = wireDepth[p.hi] = layer;
+		const u32 wires = (counts[layer-1] += (p.lo == p.hi ? 1 : 2));
+		if(wires > maxwires)
+			maxwires = wires;
 	}
 	return maxwires;
 }
-
 
 uint64_t computeSimdCost(const Network_t &nw, u8 ninputs, u32 w_aligned, u32 w_crossing)
 {

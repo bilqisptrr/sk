@@ -354,7 +354,7 @@ static bool hasSmallerMirror(u8 ninputs, SortWord_t w)
 
 static SortWord_t all_n_inputs_mask; ///< ninputs lowest bit to be set
 
-static bool isSorted(u8 ninputs, SortWord_t w)
+static bool isSorted(SortWord_t w)
 {
 	w = ~w & all_n_inputs_mask;
 	return (w&(w+1)) == 0;
@@ -416,7 +416,7 @@ void convertToBitParallelDSP(u8 ninputs, const SinglePatternList_t &singles, boo
 			continue; // Complement of reverse word is smaller, skip this vector if the network is symmetric
 		}
 
-		if(isSorted(ninputs, w))
+		if(isSorted(w))
 		{
 			continue; // Already sorted pattern will not be affected by sorting operation - useless as test vector
 		}

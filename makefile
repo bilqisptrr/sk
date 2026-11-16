@@ -45,10 +45,14 @@ endif
 
 RM := rm -rf
 
-.PHONY: all pgo pgo-gen pgo-train pgo-use clean distclean
+.PHONY: all test pgo pgo-gen pgo-train pgo-use clean distclean
 
 # Default build (tanpa PGO)
 all: $(TARGET)
+
+test:
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -I. tests/layer_metrics.cpp hutils.cpp -o tests/layer_metrics
+	./tests/layer_metrics
 
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(OBJS)
@@ -82,7 +86,7 @@ pgo-use:
 
 # Bersihkan binary & object files
 clean:
-	-$(RM) $(TARGET) $(OBJS)
+	-$(RM) $(TARGET) $(OBJS) tests/layer_metrics
 
 # Bersihkan semuanya termasuk file profil PGO
 distclean: clean
