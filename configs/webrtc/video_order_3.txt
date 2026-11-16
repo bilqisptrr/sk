@@ -1,0 +1,14 @@
+# WebRTC candidates: VP8 DefaultTemporalLayers::UpdateSearchOrder has at
+# most 3 eligible buffers; SimulcastRateAllocator has at most 3 streams.
+# Full sort for exactly 3 records only, with a fallback for 0..2 records.
+# VP8: compare (frames_since_refresh, buffer_reference) and swap records.
+# Simulcast: std::stable_sort compares maxBitrate; preserve stability for ties
+# by comparing (maxBitrate, original_index), and move each index with its key.
+# Profile separately: neither site is guaranteed to be a useful optimization.
+Ninputs=3
+SearchMode=0
+Symmetric=0
+PrefixType=0
+EscapeRate=100
+MaxMutations=2
+Verbosity=1

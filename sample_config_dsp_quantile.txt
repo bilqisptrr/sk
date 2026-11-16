@@ -1,10 +1,10 @@
 # =====================================================================
 # DSP sample config 1/4: QUANTILE / SELECTION NETWORK (SearchMode=1)
-# Use case: jitter buffer & GCC (delay / packet loss estimation) -
-#           90th percentile and trimmed mean of the delay gradient
-#           distribution over a window of N=16 samples.
-# Target: only wires 13 and 14 (of 0..15) must hold the correct ranked
-#         values (upper decile). Everything else is don't care.
+# Hypothetical use case: order statistics of 16 delay samples.
+# This is NOT evidence that WebRTC GCC uses this window or percentile.
+# Target: only wires 13 and 14 must hold the correct ranked values.
+# This alone is NOT sufficient to compute an exact trimmed mean: the
+# remaining values and their partition membership are not guaranteed.
 # =====================================================================
 
 Ninputs=16

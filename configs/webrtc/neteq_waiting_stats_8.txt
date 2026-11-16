@@ -1,0 +1,17 @@
+# WebRTC NetEq StatisticsCalculator::GetNetworkStatistics sorts a variable
+# number of waiting times (capacity 100) and reports min, max, median, mean.
+# Optional fast path ONLY when exactly 8 values are present: the network
+# guarantees wires 0,3,4,7 = min, lower median, upper median, max respectively.
+# Median remains (wire[3]+wire[4])/2 using the original integer semantics.
+# Compute the mean over all eight values (the network preserves the multiset).
+# Other wires are not sorted. Use WebRTC's original code for other counts,
+# including the empty case. This size is experimental, not a WebRTC default.
+Ninputs=8
+SearchMode=4
+QuantileIndices=0,3,4,7
+ReportEarlyOutput=0
+Symmetric=0
+PrefixType=0
+EscapeRate=100
+MaxMutations=2
+Verbosity=1

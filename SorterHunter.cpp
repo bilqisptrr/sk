@@ -13,6 +13,13 @@
 #include "ConfigParser.h"
 #include <ctime>
 #include "prefix_processor.h"
+#include "timeout.h"
+#include <cerrno>
+#include <climits>
+
+bool timeoutEnabled = false;
+unsigned timeoutCheckCounter = 0;
+std::chrono::steady_clock::time_point timeoutDeadline;
 
 ConfigParser cp;
 
@@ -306,7 +313,8 @@ bool checkOutputGroup(const BPWord_t data[], size_t qgroup, BPWord_t &accum)
  * @param bpl List of test vectors matching the prefix
  * @return true if prefix+pairs form a valid network for the selected domain mode
  */
-bool testpairsFromPrefixOutput(const Network_t &pairs, BitParallelList_t &bpl)
+template<bool timed>
+static bool testpairsFromPrefixOutputImpl(const Network_t &pairs, BitParallelList_t &bpl)
 {
 	size_t idx=0;
 	size_t failvector=0;
@@ -314,6 +322,7 @@ bool testpairsFromPrefixOutput(const Network_t &pairs, BitParallelList_t &bpl)
 
 	while(idx<bpl.size())
 	{
+		if(timed) checkTimeout();
 		static BPWord_t data[NMAX];
 		BPWord_t accum=0;
 
@@ -324,11 +333,8 @@ bool testpairsFromPrefixOutput(const Network_t &pairs, BitParallelList_t &bpl)
 
 		if(!checkOutputGroup(data,qgroup,accum))
 		{
-			while( (accum & 1ull) == 0)
-			{
-				accum>>=1;
-				failvector++;
-			}
+			// A failing group has at least one set bit.
+			failvector += (size_t)__builtin_ctzll(accum);
 
 			bumpVectorPosition(bpl, failvector);
 
@@ -339,6 +345,12 @@ bool testpairsFromPrefixOutput(const Network_t &pairs, BitParallelList_t &bpl)
 		failvector+=PARWORDSIZE;
 	}
 	return true;
+}
+
+bool testpairsFromPrefixOutput(const Network_t &pairs, BitParallelList_t &bpl)
+{
+	return timeoutEnabled ? testpairsFromPrefixOutputImpl<true>(pairs, bpl)
+	                      : testpairsFromPrefixOutputImpl<false>(pairs, bpl);
 }
 
 /**
@@ -357,6 +369,7 @@ bool testInitialPairsFromPrefixOutput(const Network_t &pairs, const BitParallelL
 
 	while(idx<bpl.size())
 	{
+		checkTimeout();
 		static BPWord_t data[NMAX];
 		BPWord_t accum=0;
 
@@ -367,15 +380,9 @@ bool testInitialPairsFromPrefixOutput(const Network_t &pairs, const BitParallelL
 
 		if(!checkOutputGroup(data,qgroup,accum))
 		{
-			while( (accum & 1ull) == 0)
-			{
-				accum>>=1;
-				for(size_t k=0;k<N;k++)
-					data[k]>>=1;
-			}
-
+			const unsigned failingBit = (unsigned)__builtin_ctzll(accum);
 			for(size_t k=0;k<N;k++)
-				failed_output_pattern |= (data[k]&1) << k;
+				failed_output_pattern |= ((data[k] >> failingBit)&1) << k;
 
 			return false;
 		}
@@ -567,6 +574,7 @@ u32 attemptMutation(Network_t &newpairs)
 				Pair_t p=newpairs[a];
 				Pair_t q;
 				do {
+					checkTimeout();
 					q=RANDELEM(alphabet);
 					}while((q.lo!=p.lo)&&(q.hi!=p.lo)&&(q.lo!=p.hi)&&(q.hi!=p.hi));
 					
@@ -611,6 +619,7 @@ static u32 computeSettlingDepths(std::vector<u32> &perTarget)
 
 	for(size_t g=0;g<ngroups;g++)
 	{
+		checkTimeout();
 		for(size_t k=0;k<N;k++)
 			data[k]=parallelpatterns_from_prefix[g*N+k];
 
@@ -656,11 +665,13 @@ static void checkImproved(const Network_t &nw)
 		if((Verbosity > 1) || (nw.size() <= ((N*(N-1u))/2u))) // Reduce rubbish listing. Should at least compete with bubble sort before reporting
 		{
 			u32 mw = computeMaxLayerWires(se);
+			std::vector<u32> sd;
+			u32 maxsd=0;
+			if(useQuantileCheck && ReportEarlyOutput)
+				maxsd=computeSettlingDepths(sd);
 			printf(" {'N':%u,'L':%lu,'C':%u,'D':%u,'MW':%u,'sw':'%s','ESC':%u,'Prefix':%lu,'Postfix':%lu,'Mode':%u",N,nw.size(),cost,depth,mw,VERSION,EscapeRate,prefix.size(),postfix.size(),SearchMode);
 			if(useQuantileCheck && ReportEarlyOutput)
 			{
-				std::vector<u32> sd;
-				u32 maxsd=computeSettlingDepths(sd);
 				printf(",'SD':%u,'SDt':[",maxsd);
 				for(size_t t=0;t<sd.size();t++)
 					printf("%u%c",sd[t],(t+1<sd.size())?',':']');
@@ -677,7 +688,8 @@ static void checkImproved(const Network_t &nw)
  */
 static void usage()
 {
-	printf("Usage: SorterHunter <config_file_name>\n\n");
+	printf("Usage: SorterHunter <config_file_name> [--timeout <seconds>]\n\n");
+	printf("Without --timeout, search continues until interrupted.\n");
 	printf("A sample config file containing help text is provided, named 'sample_config.txt'\n");
 	printf("SorterHunter is a program that tries to find efficient sorting networks by applying\n");
 	printf("an evolutionary approach. It is offered under MIT license\n");
@@ -734,15 +746,38 @@ void prepareTestVectors(const Network_t &prefix)
 /**
  * SorterHunter main routine
  */
-int main(int argc, char *argv[])
+static int runSorterHunter(int argc, char *argv[])
 {
-	/* Handle validity of command line options - extremely simple */
-	if(argc!=2)
+	if(argc!=2 && argc!=4)
 	{
 		usage();
 		return -1;
 	}
 	
+	if(argc==4)
+	{
+		if(strcmp(argv[2], "--timeout") != 0 || argv[3][0] == '\0')
+		{
+			fprintf(stderr, "Error: expected --timeout followed by a positive integer number of seconds.\n");
+			return 1;
+		}
+		for(const char *p=argv[3]; *p; ++p)
+			if(*p < '0' || *p > '9')
+			{
+				fprintf(stderr, "Error: timeout must be a positive integer number of seconds.\n");
+				return 1;
+			}
+		errno=0;
+		const unsigned long seconds = strtoul(argv[3], NULL, 10);
+		if(errno == ERANGE || seconds == 0 || seconds > UINT_MAX)
+		{
+			fprintf(stderr, "Error: timeout must be between 1 and %u seconds.\n", UINT_MAX);
+			return 1;
+		}
+		timeoutDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+		timeoutEnabled = true;
+	}
+
 	/* Process configuration file */
 	if(!cp.parseConfig(argv[1]))
 	{
@@ -770,7 +805,10 @@ int main(int argc, char *argv[])
 	for(u32 n=0;n<NMUTATIONTYPES;n++)
 	{
 		for(u32 k=0;k<mutation_type_weights[n];k++)
+		{
+			checkTimeout();
 			mutationSelector.push_back(n);
+		}
 	}
 	if(mutationSelector.size()==0)
 	{
@@ -983,6 +1021,7 @@ int main(int argc, char *argv[])
 
 	for(;;) // Outer loop - restart from here if restart is triggered (only applies if RestartRate!=0)
 	{
+		checkTimeout();
 		pairs=copyValidPairs(cp.getNetwork("InitialNetwork"),N);
 
 		// Produce initial solution, simply by adding random pairs until we found a valid network. In case no postfix is present, we demand that the added pair
@@ -990,6 +1029,7 @@ int main(int argc, char *argv[])
 		// In case there is a postfix network, this check is not implemented.
 		for(;;)
 		{
+			checkTimeout();
 			if(use_symmetry)
 				symmetricExpansion(N, pairs,se);
 			else
@@ -999,17 +1039,25 @@ int main(int argc, char *argv[])
 
 			SortWord_t failed_output_pattern;
 
-			bool initial_regok = (MaxActiveWires==0) || (computeMaxLayerWires(se)<=MaxActiveWires);
+			bool initial_regok = (MaxActiveWires==0) || (MaxActiveWires>=N) || (computeMaxLayerWires(se)<=MaxActiveWires);
+
+			if(!initial_regok && postfix.empty())
+			{
+				// Appending comparators cannot shrink an existing layer without a postfix.
+				printf("Error: initial network exceeds MaxActiveWires=%u; try a higher limit or a different random seed.\n", MaxActiveWires);
+				return -1;
+			}
 
 			if(initial_regok && testInitialPairsFromPrefixOutput(se, parallelpatterns_from_prefix, failed_output_pattern))
 				break;
-						
+
 			Pair_t p;
 			
 			if(postfix.size() == 0) // Empty postfix: find a pattern that fixes an arbitrary inversion in the first failed output
 			{
 				bool found_useful_ce=false;
 				do {
+					checkTimeout();
 					p = RANDELEM(alphabet);
 					
 					if ( (((failed_output_pattern>>p.lo)&1)==1) && (((failed_output_pattern>>p.hi)&1)==0) )
@@ -1054,6 +1102,7 @@ int main(int argc, char *argv[])
 
 		for(;;) // Program never ends, keep trying to improve, we may restart in the outer loop however.
 		{
+			checkTimeout();
 			if(Verbosity>2)
 			{
 				itercount++;
@@ -1088,6 +1137,7 @@ int main(int argc, char *argv[])
 			u32 modcount=0;
 			while(modcount<nmods)
 			{
+				checkTimeout();
 				u32 r=attemptMutation(newpairs);
 				if(r!=0)
 				{
@@ -1109,7 +1159,7 @@ int main(int argc, char *argv[])
 
 			/* Register pressure gate: reject candidates whose widest layer exceeds the
 			   vector register budget (MaxActiveWires). */
-			bool regok = (MaxActiveWires==0) || (computeMaxLayerWires(se)<=MaxActiveWires);
+			bool regok = (MaxActiveWires==0) || (MaxActiveWires>=N) || (computeMaxLayerWires(se)<=MaxActiveWires);
 
 			/* Test whether the new postfix network yields a valid network for the selected
 			   domain mode when combined with the prefix */
@@ -1178,4 +1228,18 @@ int main(int argc, char *argv[])
 	}
 
 	return 0;
+}
+
+
+int main(int argc, char *argv[])
+{
+	try
+	{
+		return runSorterHunter(argc, argv);
+	}
+	catch(const TimeoutExpired &)
+	{
+		fprintf(stderr, "Timeout reached; stopping search.\n");
+		return 0;
+	}
 }

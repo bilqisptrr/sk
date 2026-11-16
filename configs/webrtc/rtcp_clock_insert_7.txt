@@ -1,0 +1,16 @@
+# Alternative for the WebRTC RTCP clock-offset median window, capacity 7.
+# Input wires 0..5 MUST already contain the six retained offsets in sorted
+# order after removing the oldest value; wire 6 is the new offset. The output
+# is the entire sorted array, so wire 3 is the full-window median and the
+# array can be reused for the next insertion. Keep a separate FIFO to identify
+# which value expires; handle duplicates and startup sizes correctly.
+# This is not a network for seven arbitrary unsorted input values.
+Ninputs=7
+SearchMode=2
+PresortedCount=6
+NewSampleWire=6
+Symmetric=0
+PrefixType=0
+EscapeRate=100
+MaxMutations=2
+Verbosity=1

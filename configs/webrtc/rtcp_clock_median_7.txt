@@ -1,0 +1,14 @@
+# WebRTC RemoteNtpTimeEstimator uses MovingMedianFilter<int64_t> with a
+# maximum window of 7 clock offsets. For a full window, wire 3 is the median.
+# This network accepts 7 unsorted values; other output wires are unspecified.
+# Before the window fills, preserve WebRTC's smaller-size percentile behavior
+# (floor(0.5 * (count - 1))) with the existing implementation or a fallback.
+# Maintain the FIFO of offsets separately to expire the correct oldest sample.
+Ninputs=7
+SearchMode=1
+QuantileIndices=3
+Symmetric=0
+PrefixType=0
+EscapeRate=100
+MaxMutations=2
+Verbosity=1

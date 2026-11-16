@@ -1,0 +1,13 @@
+# WebRTC candidate: TransportPacketsFeedback::SortedByReceiveTime(),
+# used by GoogCC/SCReAM. Full sort of exactly 4 received PacketResult records.
+# This size is an experimental fast path, NOT a fixed WebRTC batch size.
+# Filter unreceived packets first; fallback to the original sort for all other
+# counts. Compare (receive_time, send_time, sequence_number), and swap the
+# entire record. Sorting independent chunks is NOT a globally sorted result.
+Ninputs=4
+SearchMode=0
+Symmetric=0
+PrefixType=0
+EscapeRate=100
+MaxMutations=2
+Verbosity=1
