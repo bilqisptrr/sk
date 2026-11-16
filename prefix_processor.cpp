@@ -1,5 +1,6 @@
 #include "hutils.h"
 #include "prefix_processor.h"
+#include "timeout.h"
 #include <algorithm>
 #include <cstdio>
 #include <cassert>
@@ -26,11 +27,12 @@ static void swap_sortedpatterns( SinglePatternList_t &patterns, const Pair_t &pa
 	size_t l=patterns.size();
 	SortWord_t last=-1;
 	
-	while((idxp<l) &&((patterns[idxp] &mask)!=p)) { idxp++; }
-	while((idxnp<l)&&((patterns[idxnp]&mask)==p)) { idxnp++; }
+	while((idxp<l) &&((patterns[idxp] &mask)!=p)) { checkTimeout(); idxp++; }
+	while((idxnp<l)&&((patterns[idxnp]&mask)==p)) { checkTimeout(); idxnp++; }
 	
 	while((idxnp<l)&&(idxp<l))
 	{
+		checkTimeout();
 		SortWord_t a=patterns[idxp]^mask;
 		SortWord_t b=patterns[idxnp];
 		if(a<b)
@@ -41,7 +43,7 @@ static void swap_sortedpatterns( SinglePatternList_t &patterns, const Pair_t &pa
 				last=a;
 			}
 			idxp++;
-			while((idxp<l)&&((patterns[idxp]&mask)!=p)) { idxp++; }
+			while((idxp<l)&&((patterns[idxp]&mask)!=p)) { checkTimeout(); idxp++; }
 		}
 		else
 		{
@@ -51,15 +53,17 @@ static void swap_sortedpatterns( SinglePatternList_t &patterns, const Pair_t &pa
 				last=b;
 			}
 			idxnp++;
-			while((idxnp<l)&&((patterns[idxnp]&mask)==p)) { idxnp++; }
+			while((idxnp<l)&&((patterns[idxnp]&mask)==p)) { checkTimeout(); idxnp++; }
 		}
 	}
 	while(idxnp<l)
 	{
+		checkTimeout();
 		res.push_back(patterns[idxnp++]);
 	}
 	while(idxp<l)
 	{
+		checkTimeout();
 		res.push_back(patterns[idxp++]^mask);
 	}
 	
@@ -194,7 +198,10 @@ void ClusterGroup::combine(u8 ci_idx, u8 cj_idx)
 	 */
 	for(size_t i=0;i<p1.size();i++)
 		for(size_t j=0;j<p2.size();j++)
+		{
+			checkTimeout();
 			cp.push_back( p1[i] | p2[j]);
+		}
 	std::sort(cp.begin(),cp.end()); // Keep the new output set sorted
 	p1=cp;
 	masks[cj_idx]=0;
@@ -250,7 +257,8 @@ void ClusterGroup::computeOutputs(SinglePatternList_t &patterns) const
 	patterns.clear();
 	
 	while(level>=0)
-	{	
+	{
+		checkTimeout();
 		if(indices[level]< pLists[level]->size())
 		{
 			if(level==0)
@@ -305,6 +313,7 @@ void computePrefixOutputs(u8 ninputs, const Network_t &prefix, SinglePatternList
 	
 	while(todo.size() > 0)
 	{
+		checkTimeout();
 		cg.preSort(todo[0]); // Process first remaining pair, combine related clusters
 		
 		Network_t postponed;
@@ -374,6 +383,7 @@ void computeRestrictedOutputs(u8 ninputs, const Network_t &nw, const SinglePatte
 
 		for(size_t idx=0;idx<work.size();idx++)
 		{
+			checkTimeout();
 			SortWord_t w=work[idx];
 			if((w & p)!=0) // 1 on low wire, 0 on high wire: swap
 			{
@@ -410,6 +420,7 @@ void convertToBitParallelDSP(u8 ninputs, const SinglePatternList_t &singles, boo
 
 	for(size_t idx=0;idx<singles.size();idx++)
 	{
+		checkTimeout();
 		SortWord_t w=singles[idx];
 		if(use_symmetry && hasSmallerMirror(ninputs, w))
 		{
@@ -526,6 +537,7 @@ SortWord_t createGreedyPrefix(u8 ninputs, u32 maxpairs, bool use_symmetry, Netwo
 	
 	while((prefix.size() < maxpairs) || (use_symmetry && (prefix.size()<(maxpairs-1))))
 	{
+		checkTimeout();
 		Network_t ashuf = alphabet;
 		Pair_t best= {0,1};
 		std::shuffle(ashuf.begin(),ashuf.end(), rndgen);
@@ -535,6 +547,7 @@ SortWord_t createGreedyPrefix(u8 ninputs, u32 maxpairs, bool use_symmetry, Netwo
 		SortWord_t minfuturesize = currentsize;
 		for(size_t k=0;k<alphabet.size();k++)
 		{
+			checkTimeout();
 			ClusterGroup cgnew = cg;
 			cgnew.preSort(ashuf[k]);
 			if(use_symmetry && ((ashuf[k].lo+ashuf[k].hi) != (ninputs-1)))

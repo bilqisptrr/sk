@@ -10,7 +10,7 @@ endif
 # Nama binary & source files
 TARGET := SorterHunter
 SRCS   := prefix_processor.cpp hutils.cpp SorterHunter.cpp ConfigParser.cpp
-HEADERS:= htypes.h
+HEADERS:= htypes.h hutils.h prefix_processor.h ConfigParser.h timeout.h
 OBJS   := $(SRCS:.cpp=.o)
 
 # Argumen default untuk training run PGO (sesuaikan jika program butuh argumen spesifik)
@@ -50,9 +50,10 @@ RM := rm -rf
 # Default build (tanpa PGO)
 all: $(TARGET)
 
-test:
+test: $(TARGET)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -I. tests/layer_metrics.cpp hutils.cpp -o tests/layer_metrics
 	./tests/layer_metrics
+	python3 tests/timeout_test.py ./$(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(OBJS)

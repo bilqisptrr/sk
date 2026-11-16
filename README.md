@@ -61,7 +61,14 @@ The following lists of networks have been compiled for your convenience:
 
 
 ## The program
-The program is very straightforward to build (just "make") on a Linux machine. It expects *one* command line argument, which is the name of the configuration file to use. An example config file is bundled with the sources. Once initialised the program will enter an endless optimisation loop, printing out any improvements it found to previous results it reported. Current version is limited to 64 inputs.
+The program is very straightforward to build (just "make") on a Linux machine. Pass the configuration file as the first argument. Without a timeout, the search normally runs until interrupted, printing improvements as they are found. Current version is limited to 64 inputs.
+
+```sh
+./SorterHunter sample_config.txt               # run until interrupted
+./SorterHunter sample_config.txt --timeout 30  # stop after approximately 30 seconds
+```
+
+`--timeout` accepts a positive whole number of wall-clock seconds (1 to 4294967295). The deadline starts before the configuration is loaded and includes prefix and test-vector preparation. On timeout the program exits normally with status 0, after printing a message to stderr; results already reported remain on stdout. The deadline is cooperative: a long library operation, memory allocation or blocked I/O can delay the exit beyond the requested time. A search may also finish or fail earlier for other reasons.
 
 ## Working principles
 After the config file is read, the program works as follows:
