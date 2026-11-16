@@ -1,0 +1,42 @@
+# =====================================================================
+# DSP sample config 4/4: MULTI-OUTPUT SHARED-PREFIX NETWORK (SearchMode=4)
+# Use case: video spatial denoising - 3x3 pixel window (N=9):
+#           min (morphological erode), median (denoising) and max
+#           (dilate) computed simultaneously by one network.
+# Target: wires 0 (min), 4 (median), 8 (max) all ranked correctly.
+# The 'SD'/'SDt' fields in the output report after how many layers each
+# output settles - the prefix up to that depth is shared by all
+# consumers (early output / shared-prefix pipelining).
+# =====================================================================
+
+Ninputs=9
+
+SearchMode=4
+QuantileIndices=0,4,8
+
+# N odd disables symmetry anyway; {0,4,8} is mirror symmetric
+Symmetric=0
+
+# SIMD-aware cost function
+SimdAwareCost=1
+SimdWeightAligned=1
+SimdWeightCrossing=3
+
+# Register pressure: max 8 active wires per layer (8 x YMM @ AVX2)
+MaxActiveWires=8
+
+# Report per-target settling layers ('SD'/'SDt' output fields)
+ReportEarlyOutput=1
+
+EscapeRate=100
+MaxMutations=2
+WeigthRemovePair = 1
+WeigthSwapPairs  = 1
+WeigthReplacePair = 0
+WeightCrossPairs = 1
+WeightSwapIntersectingPairs = 2
+WeightReplaceHalfPair = 1
+
+PrefixType = 0
+
+Verbosity=1

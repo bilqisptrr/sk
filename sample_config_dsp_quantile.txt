@@ -1,0 +1,43 @@
+# =====================================================================
+# DSP sample config 1/4: QUANTILE / SELECTION NETWORK (SearchMode=1)
+# Use case: jitter buffer & GCC (delay / packet loss estimation) -
+#           90th percentile and trimmed mean of the delay gradient
+#           distribution over a window of N=16 samples.
+# Target: only wires 13 and 14 (of 0..15) must hold the correct ranked
+#         values (upper decile). Everything else is don't care.
+# =====================================================================
+
+Ninputs=16
+
+# Quantile search: only verify the listed output indices.
+SearchMode=1
+QuantileIndices=13,14
+
+# Symmetric must be disabled: the target set {13,14} is not mirror
+# symmetric ({1,2} would be its mirror), so mirrored test vectors
+# cannot be discarded.
+Symmetric=0
+
+# SIMD-aware cost function: CEs with wire distance 1,2,4,8 or mirror
+# symmetric position cost 1, lane crossing CEs cost 4.
+SimdAwareCost=1
+SimdWeightAligned=1
+SimdWeightCrossing=4
+
+# Register pressure: max 16 active wires per layer (16 x YMM @ AVX2)
+MaxActiveWires=16
+
+EscapeRate=100
+MaxMutations=2
+WeigthRemovePair = 1
+WeigthSwapPairs  = 1
+WeigthReplacePair = 0
+WeightCrossPairs = 1
+WeightSwapIntersectingPairs = 2
+WeightReplaceHalfPair = 1
+
+# Greedy prefix reduces the number of test vectors (2^16 -> far less)
+PrefixType = 2
+GreedyPrefixSize = 8
+
+Verbosity=1

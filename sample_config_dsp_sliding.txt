@@ -1,0 +1,40 @@
+# =====================================================================
+# DSP sample config 2/4: SLIDING WINDOW INSERTION NETWORK (SearchMode=2)
+# Use case: audio click / impulse noise removal - median of a sliding
+#           window of N=9 samples where the 8 old samples are already
+#           sorted (presorted prefix) and 1 new sample enters.
+# Input class: monotone on wires 0..7, wire 8 carries the new sample.
+# Test vectors: 2*(8+1)=18 patterns instead of 2^9=512.
+# =====================================================================
+
+Ninputs=9
+
+SearchMode=2
+PresortedCount=8
+NewSampleWire=8
+
+# Sliding window input class is not mirror-closed: disable symmetry
+Symmetric=0
+
+# SIMD-aware cost function
+SimdAwareCost=1
+SimdWeightAligned=1
+SimdWeightCrossing=3
+
+# Register pressure: max 32 active wires per layer (32 x V @ ARM64 NEON)
+MaxActiveWires=32
+
+EscapeRate=100
+MaxMutations=2
+WeigthRemovePair = 1
+WeigthSwapPairs  = 1
+WeigthReplacePair = 0
+WeightCrossPairs = 1
+WeightSwapIntersectingPairs = 2
+WeightReplaceHalfPair = 1
+
+# No prefix: the restricted input class is already tiny.
+# (Greedy prefix is disabled automatically in this mode.)
+PrefixType = 0
+
+Verbosity=1

@@ -1,0 +1,40 @@
+# =====================================================================
+# DSP sample config 3/4: ASYMMETRIC PARTIAL NETWORK (SearchMode=3)
+# Use case: AEC / VAD / AGC - envelope & noise floor tracking:
+#           isolate the K=4 smallest values of a window of N=16
+#           (quantile bawah untuk estimasi noise floor).
+# Target: wires 0..3 must hold the 4 smallest values (ranked, sorted
+#         among themselves); wires 4..15 are untouched / don't care.
+# =====================================================================
+
+Ninputs=16
+
+SearchMode=3
+IsolateSide=0
+IsolateCount=4
+
+# Target set {0,1,2,3} is not mirror symmetric: disable symmetry
+Symmetric=0
+
+# SIMD-aware cost function
+SimdAwareCost=1
+SimdWeightAligned=1
+SimdWeightCrossing=4
+
+# Register pressure: max 16 active wires per layer
+MaxActiveWires=16
+
+EscapeRate=100
+MaxMutations=2
+WeigthRemovePair = 1
+WeigthSwapPairs  = 1
+WeigthReplacePair = 0
+WeightCrossPairs = 1
+WeightSwapIntersectingPairs = 2
+WeightReplaceHalfPair = 1
+
+# Greedy prefix reduces the number of test vectors
+PrefixType = 2
+GreedyPrefixSize = 8
+
+Verbosity=1
