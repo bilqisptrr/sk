@@ -82,7 +82,7 @@ BOLT_DATA := bolt.fdata
 
 RM := rm -rf
 
-.PHONY: all test pgo pgo-gen pgo-train pgo-use cspgo bolt cspgo-bolt bolt-optimize clean distclean
+.PHONY: all test test-clang-pgo pgo pgo-gen pgo-train pgo-use cspgo bolt cspgo-bolt bolt-optimize clean distclean
 
 # Default build (tanpa PGO)
 all: $(TARGET)
@@ -92,6 +92,9 @@ test: $(TARGET)
 	./tests/layer_metrics
 	python3 tests/timeout_test.py ./$(TARGET)
 	python3 tests/webrtc_configs_test.py ./$(TARGET)
+
+test-clang-pgo:
+	python3 tests/clang_pgo_test.py "$(CXX)" "$(LLVM_PROFDATA)"
 
 $(TARGET): $(OBJS)
 	$(CXX) $(LINK_CXXFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -o $@ $(OBJS)
@@ -111,15 +114,30 @@ pgo:
 	@echo "Selesai! Binary $(TARGET) sudah teroptimasi penuh dengan PGO."
 
 pgo-gen:
+	@$(MAKE) clean
 	$(MAKE) $(TARGET) CXXFLAGS="$(CXXFLAGS) $(PGO_GEN_FLAGS)" LDFLAGS="$(LDFLAGS) $(PGO_GEN_FLAGS)"
 
 pgo-train:
-	./$(TARGET) $(PGO_RUN_ARGS)
 ifeq ($(COMPILER_TYPE), clang)
+	LLVM_PROFILE_FILE="$(CURDIR)/default.profraw" ./$(TARGET) $(PGO_RUN_ARGS)
 	$(LLVM_PROFDATA) merge -output=default.profdata default.profraw
+else
+	./$(TARGET) $(PGO_RUN_ARGS)
 endif
 
 pgo-use:
+ifeq ($(COMPILER_TYPE), clang)
+	@set -e; \
+	if [ -f default.profraw ] && { [ ! -f default.profdata ] || [ default.profraw -nt default.profdata ]; }; then \
+		command -v $(LLVM_PROFDATA) >/dev/null || { echo "Error: $(LLVM_PROFDATA) not found; install the LLVM tools matching Clang or set LLVM_PROFDATA." >&2; exit 1; }; \
+		echo "Merging default.profraw into default.profdata..."; \
+		$(LLVM_PROFDATA) merge -o default.profdata.tmp default.profraw || { rm -f default.profdata.tmp; exit 1; }; \
+		mv -f default.profdata.tmp default.profdata; \
+	elif [ ! -s default.profdata ]; then \
+		echo "Error: no Clang PGO profile found. Run make pgo-train (or run the instrumented binary normally) first." >&2; \
+		exit 1; \
+	fi
+endif
 	@$(MAKE) clean
 	$(MAKE) $(TARGET) CXXFLAGS="$(CXXFLAGS) $(PGO_USE_FLAGS)" LDFLAGS="$(LDFLAGS) $(PGO_USE_FLAGS)"
 

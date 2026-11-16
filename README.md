@@ -92,6 +92,27 @@ make pgo NO_PLT=1 PGO_RUN_ARGS="sample_config.txt --timeout 30"
 
 Use a workload representative of production, since a profile for a different search mode may reduce performance. `make pgo` rebuilds the binary and discards existing local PGO profile files.
 
+For the manual Clang PGO workflow, generate and train the instrumented binary
+before applying its profile:
+
+```sh
+make pgo-gen CXX=clang++
+./SorterHunter sample_config.txt --timeout 30
+make pgo-use CXX=clang++
+# Or use: make pgo-train CXX=clang++ PGO_RUN_ARGS="sample_config.txt --timeout 30"
+```
+
+`make pgo-use` converts `default.profraw` to `default.profdata` automatically
+when needed and reports an error before cleaning the binary if neither profile
+exists. The instrumented run must exit normally to write the raw profile;
+`Ctrl+C` or a forced kill may not write it. Use `llvm-profdata` from the same
+LLVM toolchain as Clang, or specify e.g. `LLVM_PROFDATA=llvm-profdata-18`.
+If `LLVM_PROFILE_FILE` was set to a different path during a manual run, merge
+that file explicitly into `default.profdata` with `llvm-profdata merge` first.
+`make pgo-gen` rebuilds the instrumented executable but does not erase existing
+profiles; remove old profiles or use `make pgo` for a fresh training run.
+
+
 ### Clang context-sensitive PGO and BOLT (optional)
 
 The following workflows use a separate instrumented build for each profiling
