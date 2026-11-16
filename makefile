@@ -17,6 +17,23 @@ OBJS   := $(SRCS:.cpp=.o)
 PGO_RUN_ARGS ?= 
 BASE_FLAGS := -O3 -DNDEBUG -Wall -Wextra -march=native -mtune=native -flto -funroll-loops -fomit-frame-pointer
 
+# Optional tuning: benchmark on the target machine before enabling.
+# -fno-plt changes dynamic binding behavior and is only supported here on Linux.
+NO_PLT ?= 0
+TUNE_FLAGS ?=
+EXTRA_LDFLAGS ?=
+ifeq ($(NO_PLT),1)
+    ifneq ($(shell uname -s),Linux)
+        $(error NO_PLT=1 is only supported on Linux)
+    endif
+    HAS_NO_PLT := $(shell printf 'int main() { return 0; }\n' | $(CXX) -Werror -fno-plt -x c++ -c -o /dev/null - >/dev/null 2>&1 && echo yes)
+    ifneq ($(HAS_NO_PLT),yes)
+        $(error NO_PLT=1 requested but $(CXX) does not support -fno-plt)
+    endif
+    BASE_FLAGS += -fno-plt
+endif
+BASE_FLAGS += $(TUNE_FLAGS)
+
 # 3. Compiler-Specific Tuning (LLVM/Clang vs GCC)
 ifeq ($(COMPILER_TYPE), clang)
 	# Gunakan lld jika tersedia agar LTO jauh lebih cepat & optimal
@@ -51,12 +68,12 @@ RM := rm -rf
 all: $(TARGET)
 
 test: $(TARGET)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -I. tests/layer_metrics.cpp hutils.cpp -o tests/layer_metrics
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -I. tests/layer_metrics.cpp hutils.cpp -o tests/layer_metrics
 	./tests/layer_metrics
 	python3 tests/timeout_test.py ./$(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(OBJS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -o $@ $(OBJS)
 
 %.o: %.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@

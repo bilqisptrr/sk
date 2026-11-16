@@ -70,6 +70,28 @@ The program is very straightforward to build (just "make") on a Linux machine. P
 
 `--timeout` accepts a positive whole number of wall-clock seconds (1 to 4294967295). The deadline starts before the configuration is loaded and includes prefix and test-vector preparation. On timeout the program exits normally with status 0, after printing a message to stderr; results already reported remain on stdout. The deadline is cooperative: a long library operation, memory allocation or blocked I/O can delay the exit beyond the requested time. A search may also finish or fail earlier for other reasons.
 
+### Optional compiler tuning
+
+The default build already uses `-O3`, LTO, native CPU tuning and compiler-specific optimization flags. On Linux, GCC or Clang builds can optionally use `-fno-plt`:
+
+```sh
+make clean
+make NO_PLT=1
+make test NO_PLT=1
+```
+
+This changes dynamic calls to use GOT indirection and resolves affected symbols at load time instead of lazy PLT binding. It does not disable symbol interposition, but may affect startup and tooling, and its performance benefit depends on the workload and platform. It is **off by default**: local measurements were mixed and did not establish a consistent improvement. Unsupported platforms or compilers reject `NO_PLT=1` with an error. `-march=native` already makes the binary specific to the build CPU; do not assume it will run on older machines.
+
+For experiments, `make TUNE_FLAGS="..." EXTRA_LDFLAGS="..."` appends custom compiler and linker flags. Run `make clean` when changing flags, and benchmark and test on the deployment machine. Avoid flags that change language or math semantics unless those changes are intentional.
+
+Profile-guided optimization is also available using an actual representative configuration as the training workload. For example, a bounded training run can be started with:
+
+```sh
+make pgo NO_PLT=1 PGO_RUN_ARGS="sample_config.txt --timeout 30"
+```
+
+Use a workload representative of production, since a profile for a different search mode may reduce performance. `make pgo` rebuilds the binary and discards existing local PGO profile files.
+
 ## Working principles
 After the config file is read, the program works as follows:
 #### Determining the prefix to use
